@@ -12,6 +12,7 @@
 # limitations under the License.
 # ========= Copyright 2023-2026 @ CAMEL-AI.org. All Rights Reserved. =========
 import importlib
+import os
 import sys
 
 import pytest
@@ -39,6 +40,18 @@ def _load_api(monkeypatch, api_key):
     api = importlib.reload(api)
     assert "math_add" in api._registered_endpoints
     return api
+
+
+def _reload_api_after_failure():
+    r"""Leave `camel.runtimes.api` importable for whatever test runs next.
+
+    A reload that raises leaves the module object in a half-initialised state,
+    so put a usable one back.
+    """
+    os.environ["CAMEL_RUNTIME_API_KEY"] = "cleanup-key"
+    sys.argv = ["api.py", "camel.toolkits.MathToolkit"]
+    importlib.reload(importlib.import_module("camel.runtimes.api"))
+    del os.environ["CAMEL_RUNTIME_API_KEY"]
 
 
 def test_tool_endpoint_requires_a_key(monkeypatch):
@@ -102,19 +115,15 @@ def test_any_of_several_configured_keys_is_accepted(monkeypatch):
         assert resp.status_code == 200
 
 
-def test_unset_key_generates_one_rather_than_leaving_tools_open(monkeypatch):
-    r"""An operator who starts the server by hand still gets a closed door."""
-    api = _load_api(monkeypatch, None)
-    client = TestClient(api.app)
-
-    assert client.post("/math_add", json=ADD_BODY).status_code == 401
-
-    (generated,) = api._API_KEYS
-    assert len(generated) >= 32
-    resp = client.post(
-        "/math_add", json=ADD_BODY, headers={"X-API-Key": generated}
-    )
-    assert resp.status_code == 200
+def test_unset_key_refuses_to_start(monkeypatch):
+    r"""Rather than invent a key it would then have to log somewhere."""
+    try:
+        with pytest.raises(
+            RuntimeError, match="CAMEL_RUNTIME_API_KEY is not set"
+        ):
+            _load_api(monkeypatch, None)
+    finally:
+        _reload_api_after_failure()
 
 
 def test_empty_key_disables_authentication(monkeypatch):

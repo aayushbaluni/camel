@@ -116,7 +116,7 @@ All runtimes inherit from <b>BaseRuntime</b>, which defines core methods:
   runtime = RemoteHttpRuntime("remote-host", api_key="my-secret")
   ```
   <br/>
-  Started by hand with no key configured, the server generates one and logs it at startup rather than leaving its tools open. Set <code>CAMEL_RUNTIME_API_KEY</code> to an empty value to disable authentication deliberately, on a trusted single-user network.
+  Started by hand with no <code>CAMEL_RUNTIME_API_KEY</code> at all, the server refuses to start, rather than invent a key it would then have to write somewhere for you to read. Set the variable to an empty value to serve without authentication deliberately, on a trusted single-user network.
 </Card>
 
 ## Runtime Types: Key Features

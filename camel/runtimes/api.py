@@ -19,7 +19,6 @@ import io
 import json
 import logging
 import os
-import secrets
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -51,28 +50,33 @@ logger.info(f"Modules and functions: {modules_functions}")
 # no CLI surface left to configure this through, and an environment variable is
 # how the key reaches this process when a runtime starts it in a container.
 #
-# Secure by default: with nothing configured an ephemeral key is generated and
-# logged, so an operator who runs this module by hand still gets a closed door
-# rather than an open one. Setting the variable to an empty value disables
-# authentication explicitly, for a single-user trusted network.
+# Refuse to start when the variable is absent, rather than inventing a key: a
+# generated key would have to be written somewhere for the operator to use it,
+# and a credential in a log file is its own problem. The runtimes in this
+# package always set the variable, so this only affects starting the server by
+# hand. Setting it to an empty value disables authentication explicitly, for a
+# single-user trusted network.
 _raw_api_key = os.environ.get("CAMEL_RUNTIME_API_KEY")
 
 if _raw_api_key is None:
-    _API_KEYS: List[str] = [secrets.token_urlsafe(32)]
-    logger.warning(
-        "CAMEL_RUNTIME_API_KEY is not set; generated an ephemeral key for "
-        "this process. Pass it as 'Authorization: Bearer <key>' or "
-        "'X-API-Key: <key>': %s",
-        _API_KEYS[0],
+    raise RuntimeError(
+        "CAMEL_RUNTIME_API_KEY is not set. This server publishes every "
+        "registered tool as an HTTP endpoint, so it will not start without "
+        "one. Set it to the key clients must present, as a comma-separated "
+        "list for more than one, or to an empty value to serve without "
+        "authentication on a trusted network."
     )
-else:
-    _API_KEYS = [key.strip() for key in _raw_api_key.split(",") if key.strip()]
-    if not _API_KEYS:
-        logger.warning(
-            "CAMEL_RUNTIME_API_KEY is empty: authentication is disabled and "
-            "every registered tool is reachable by any client that can reach "
-            "this port."
-        )
+
+_API_KEYS: List[str] = [
+    key.strip() for key in _raw_api_key.split(",") if key.strip()
+]
+
+if not _API_KEYS:
+    logger.warning(
+        "CAMEL_RUNTIME_API_KEY is empty: authentication is disabled and "
+        "every registered tool is reachable by any client that can reach "
+        "this port."
+    )
 
 
 def _keys_equal(left: str, right: str) -> bool:
